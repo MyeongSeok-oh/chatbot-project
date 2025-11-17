@@ -162,8 +162,8 @@ def test_document_management():
             data = response.json()
             results = data.get('results', [])
             print_result(True, f"문서 검색 성공 (결과 수: {len(results)})")
-            if data['documents']:
-                print(f"   - 첫 번째 결과: {data['documents'][0][:50]}...")
+            if results:  # 또는 if data.get('results'):
+                print(f"   - 첫 번째 결과: {results[0]['content'][:50]}...")
             return True
         else:
             print_result(False, "문서 검색 실패")
