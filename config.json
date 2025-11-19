@@ -7,12 +7,12 @@
     "version": "3.2.0"
   },
   "model": {
-    "llm_model": "gpt-4o-mini",
+    "llm_model": "gpt-4o",
     "embedding_model": "text-embedding-3-small"
   },
   "llm_parameters": {
     "temperature": 0.7,
-    "max_tokens": 300
+    "max_completion_tokens": 300
   },
   "paths": {
     "chroma_persist_dir": "./chroma_db",

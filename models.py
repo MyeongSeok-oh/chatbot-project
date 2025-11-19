@@ -19,6 +19,7 @@ class GenerateResponse(BaseModel):
     """LLM 생성 응답 모델"""
     success: bool = Field(..., description="성공 여부")
     response: str = Field(..., description="AI 응답")
+    user_query: str = Field(..., description="사용자 질문")  # ← 이 줄 추가
     source: str = Field(default="llm", description="응답 소스")
     user_id: str = Field(..., description="사용자 ID")
     rag_used: bool = Field(default=False, description="RAG 사용 여부")

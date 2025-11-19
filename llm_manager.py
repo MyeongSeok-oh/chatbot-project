@@ -26,16 +26,34 @@ class LLMManager:
         self.llm = self._initialize_llm()
         
         print(f"[LLMManager] LLM 모델 로딩 완료")
-    
+
     def _initialize_llm(self) -> ChatOpenAI:
         """LLM 모델 초기화"""
-        return ChatOpenAI(
-            model=self.config.LLM_MODEL,
-            temperature=self.config.TEMPERATURE,
-            max_tokens=self.config.MAX_TOKENS,
-            openai_api_key=self.config.OPENAI_API_KEY,
-            streaming=False
-        )
+        # GPT-5는 max_completion_tokens 사용, temperature=1만 지원
+        if 'gpt-5' in self.config.LLM_MODEL.lower():
+            params = {
+                "model": self.config.LLM_MODEL,
+                "openai_api_key": self.config.OPENAI_API_KEY,
+                "streaming": False
+            }
+
+            # max_completion_tokens가 있으면 추가
+            if self.config.MAX_COMPLETION_TOKENS:
+                params["max_completion_tokens"] = self.config.MAX_COMPLETION_TOKENS
+
+            # GPT-5는 temperature를 설정하지 않음 (기본값 1 사용)
+            print("[LLMManager] GPT-5 모드: temperature=1.0 (기본값)")
+
+            return ChatOpenAI(**params)
+        else:
+            # GPT-4 이하는 max_tokens와 temperature 사용
+            return ChatOpenAI(
+                model=self.config.LLM_MODEL,
+                temperature=self.config.TEMPERATURE,
+                max_tokens=self.config.MAX_TOKENS,
+                openai_api_key=self.config.OPENAI_API_KEY,
+                streaming=False
+            )
     
     def create_simple_chain(self):
         """단순 대화 체인 생성 (메모리 없음)"""

@@ -201,6 +201,11 @@ class RAGManager:
             "chat_history": chat_history
         })
 
+        # 🔍 디버그: 응답 확인
+        print(f"[RAGManager DEBUG] 응답 타입: {type(response)}")
+        print(f"[RAGManager DEBUG] 응답 내용: '{response}'")
+        print(f"[RAGManager DEBUG] 응답 길이: {len(str(response))}")
+
         # 출처 문서 검색
         source_docs = retriever.invoke(query)
 

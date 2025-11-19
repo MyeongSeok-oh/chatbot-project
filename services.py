@@ -64,6 +64,7 @@ class ChatService:
             return GenerateResponse(
                 success=False,
                 response="죄송합니다. 일시적으로 응답을 생성할 수 없습니다.",
+                user_query=request.text,  # ← 이 줄 추가
                 user_id=request.user_id,
                 error=error_msg
             )
@@ -116,6 +117,7 @@ class ChatService:
         return GenerateResponse(
             success=True,
             response=bot_response,
+            user_query=request.text,  # ← 이 줄 추가
             user_id=request.user_id,
             rag_used=True,
             source_documents=source_info if source_docs else None
@@ -154,6 +156,7 @@ class ChatService:
         return GenerateResponse(
             success=True,
             response=bot_response,
+            user_query=request.text,  # ← 이 줄 추가
             user_id=request.user_id,
             rag_used=False
         )
