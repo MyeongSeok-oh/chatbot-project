@@ -29,7 +29,7 @@ RAG (Retrieval-Augmented Generation)와 대화 메모리 기능을 갖춘 모듈
 ├── models.py              # API 모델 정의
 ├── app_initializer.py     # 서버 초기화
 ├── client_test.py         # 테스트 클라이언트
-├── .env                   # 환경 변수 (API 키)
+├── .env                   # 환경 변수 (API 키)  # github 업로드 XX
 ├── system_prompt.json     # ⭐ 시스템 프롬프트 설정 (어르신 특화)
 └── requirements.txt       # 의존성 패키지
 ```
