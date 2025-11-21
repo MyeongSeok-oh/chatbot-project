@@ -7,7 +7,7 @@ from prompts import PromptManager
 from llm_manager import LLMManager
 from rag_manager import RAGManager
 from memory_manager import MemoryManager
-from services import ChatService, DocumentService, MemoryService, StatsService
+from services import ChatService, DocumentService, StatsService
 
 
 class AppInitializer:
@@ -39,8 +39,7 @@ class AppInitializer:
             self.memory_manager
         )
         self.document_service = DocumentService(self.rag_manager)
-        self.memory_service = MemoryService(self.memory_manager)
-        self.stats_service = StatsService(self.memory_manager, self.rag_manager)
+        self.stats_service = StatsService(self.rag_manager)
         
         print("=" * 60)
         print("모든 모듈 초기화 완료")
@@ -51,7 +50,6 @@ class AppInitializer:
         return {
             'chat': self.chat_service,
             'document': self.document_service,
-            'memory': self.memory_service,
             'stats': self.stats_service
         }
     
@@ -64,5 +62,5 @@ class AppInitializer:
         print(f"LLM 모델: {Config.LLM_MODEL}")
         print(f"임베딩 모델: {Config.EMBEDDING_MODEL}")
         print(f"문서 수: {self.document_service.get_document_count()}")
-        print(f"아키텍처: 모듈화 + 서비스 레이어")
+        print(f"아키텍처: 모듈화 + 서비스 레이어 (라우터 서버 연동)")
         print("=" * 60)

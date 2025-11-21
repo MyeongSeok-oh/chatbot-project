@@ -1,6 +1,6 @@
 """
 services.py - 비즈니스 로직 처리
-RAG + Memory 통합 버전
+RAG + Memory 통합 버전 (라우터 서버 연동)
 """
 from datetime import datetime
 from typing import List, Tuple, Dict, Optional
@@ -33,7 +33,7 @@ class ChatService:
         self.rag_manager = rag_manager
         self.memory_manager = memory_manager
 
-    def generate_response(self, request: GenerateRequest) -> GenerateResponse:
+    async def generate_response(self, request: GenerateRequest) -> GenerateResponse:
         """
         사용자 요청에 대한 응답 생성
 
@@ -52,10 +52,10 @@ class ChatService:
         try:
             if request.use_rag:
                 # RAG 모드
-                return self._generate_with_rag(request, start_time)
+                return await self._generate_with_rag(request, start_time)
             else:
                 # 일반 모드
-                return self._generate_without_rag(request, start_time)
+                return await self._generate_without_rag(request, start_time)
 
         except Exception as e:
             error_msg = str(e)
@@ -64,27 +64,29 @@ class ChatService:
             return GenerateResponse(
                 success=False,
                 response="죄송합니다. 일시적으로 응답을 생성할 수 없습니다.",
-                user_query=request.text,  # ← 이 줄 추가
                 user_id=request.user_id,
                 error=error_msg
             )
 
-    def _generate_with_rag(
+    async def _generate_with_rag(
         self,
         request: GenerateRequest,
         start_time: datetime
     ) -> GenerateResponse:
         """
         RAG를 사용한 응답 생성
-        ⭐ 개선: 메모리도 함께 사용!
         """
         print(f"[Service] RAG 모드 실행")
 
         # ⭐ 1. 메모리 사용 여부 확인
         if request.use_memory:
-            print(f"[Service] RAG + 메모리 모드")
-            # 대화 기록 불러오기
-            memory = self.memory_manager.get_or_create_memory(request.user_id)
+            print(f"[Service] RAG + 메모리 모드 - 라우터에서 대화 기록 로드")
+            
+            # 라우터 서버에서 대화 기록 가져오기
+            chat_history_data = await self.memory_manager.load_chat_history_from_router(request.user_id)
+            
+            # 메모리 객체 생성 및 복원
+            memory = self.memory_manager.get_or_create_memory(request.user_id, chat_history_data)
             chat_history = memory.load_memory_variables({}).get("chat_history", [])
 
             # RAG + 메모리 통합 응답 생성
@@ -105,25 +107,15 @@ class ChatService:
 
         print(f"[Service] RAG 응답 완료 ({len(source_docs)}개 문서)")
 
-        # ⭐ 2. 메모리 저장 (RAG 사용 여부와 무관)
-        if request.use_memory:
-            self.memory_manager.save_context(
-                request.user_id,
-                request.text,
-                bot_response
-            )
-            print(f"[Service] 대화 기록 저장 완료")
-
         return GenerateResponse(
             success=True,
             response=bot_response,
-            user_query=request.text,  # ← 이 줄 추가
             user_id=request.user_id,
             rag_used=True,
             source_documents=source_info if source_docs else None
         )
 
-    def _generate_without_rag(
+    async def _generate_without_rag(
         self,
         request: GenerateRequest,
         start_time: datetime
@@ -132,19 +124,16 @@ class ChatService:
         print(f"[Service] 일반 모드 실행")
 
         if request.use_memory:
-            # 메모리 포함
-            memory = self.memory_manager.get_or_create_memory(request.user_id)
+            # 라우터 서버에서 대화 기록 가져오기
+            chat_history_data = await self.memory_manager.load_chat_history_from_router(request.user_id)
+            
+            # 메모리 객체 생성 및 복원
+            memory = self.memory_manager.get_or_create_memory(request.user_id, chat_history_data)
             chat_history = memory.load_memory_variables({}).get("chat_history", [])
 
             bot_response = self.llm_manager.generate_with_history(
                 request.text,
                 chat_history
-            )
-
-            self.memory_manager.save_context(
-                request.user_id,
-                request.text,
-                bot_response
             )
         else:
             # 단순 생성
@@ -156,7 +145,6 @@ class ChatService:
         return GenerateResponse(
             success=True,
             response=bot_response,
-            user_query=request.text,  # ← 이 줄 추가
             user_id=request.user_id,
             rag_used=False
         )
@@ -284,73 +272,19 @@ class DocumentService:
         return self.rag_manager.clear_documents()
 
 
-class MemoryService:
-    """메모리 관련 비즈니스 로직"""
-
-    def __init__(self, memory_manager: MemoryManager):
-        """
-        Args:
-            memory_manager: 메모리 관리자
-        """
-        self.memory_manager = memory_manager
-
-    def get_memory(self, user_id: str) -> Dict:
-        """
-        대화 메모리 조회
-
-        Args:
-            user_id: 사용자 ID
-
-        Returns:
-            Dict: 메모리 정보
-        """
-        info = self.memory_manager.get_memory_info(user_id)
-
-        return {
-            "user_id": info["user_id"],
-            "conversation_count": info["conversation_count"],
-            "history": info["history"]
-        }
-
-    def clear_memory(self, user_id: str) -> Dict:
-        """
-        대화 메모리 삭제
-
-        Args:
-            user_id: 사용자 ID
-
-        Returns:
-            Dict: 삭제 결과
-        """
-        success = self.memory_manager.clear_memory(user_id)
-
-        if success:
-            return {"message": f"{user_id}의 대화 기록이 삭제되었습니다"}
-        else:
-            return {"message": "대화 기록이 없습니다"}
-
-
 class StatsService:
     """통계 관련 비즈니스 로직"""
 
-    def __init__(
-        self,
-        memory_manager: MemoryManager,
-        rag_manager: RAGManager
-    ):
+    def __init__(self, rag_manager: RAGManager):
         """
         Args:
-            memory_manager: 메모리 관리자
             rag_manager: RAG 관리자
         """
-        self.memory_manager = memory_manager
         self.rag_manager = rag_manager
 
     def get_stats(self) -> Dict:
         """서버 통계 조회"""
         return {
-            "active_users": self.memory_manager.get_active_users(),
-            "total_conversations": self.memory_manager.get_total_conversations(),
             "documents_in_db": self.rag_manager.get_document_count(),
             "model": Config.LLM_MODEL,
             "embedding_model": Config.EMBEDDING_MODEL

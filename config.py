@@ -37,11 +37,9 @@ class Config:
     # LLM 파라미터
     TEMPERATURE = None
     MAX_TOKENS = None
-    MAX_COMPLETION_TOKENS = None  # gpt-5 전용
     
     # 경로 설정
     CHROMA_PERSIST_DIR = None
-    MEMORY_DIR = None
     SYSTEM_PROMPT_FILE = None
     
     # 메모리 설정
@@ -84,17 +82,15 @@ class Config:
             model = cls._config_data.get('model', {})
             cls.LLM_MODEL = model.get('llm_model', 'gpt-3.5-turbo')
             cls.EMBEDDING_MODEL = model.get('embedding_model', 'text-embedding-3-small')
-
+            
             # LLM 파라미터
             params = cls._config_data.get('llm_parameters', {})
             cls.TEMPERATURE = params.get('temperature', 0.7)
-            cls.MAX_TOKENS = params.get('max_tokens', 300)  # GPT-4 이하용
-            cls.MAX_COMPLETION_TOKENS = params.get('max_completion_tokens', None)  # GPT-5용
+            cls.MAX_TOKENS = params.get('max_tokens', 300)
             
             # 경로 설정
             paths = cls._config_data.get('paths', {})
             cls.CHROMA_PERSIST_DIR = paths.get('chroma_persist_dir', './chroma_db')
-            cls.MEMORY_DIR = paths.get('memory_dir', './chat_history')
             cls.SYSTEM_PROMPT_FILE = paths.get('system_prompt_file', './system_prompt.json')
             
             # 메모리 설정
@@ -151,7 +147,6 @@ class Config:
     def create_directories(cls):
         """필요한 디렉토리 생성"""
         Path(cls.CHROMA_PERSIST_DIR).mkdir(exist_ok=True)
-        Path(cls.MEMORY_DIR).mkdir(exist_ok=True)
         print(f"[Config] 디렉토리 생성 완료")
     
     @classmethod

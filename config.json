@@ -7,21 +7,20 @@
     "version": "3.2.0"
   },
   "model": {
-    "llm_model": "gpt-4o",
+    "llm_model": "gpt-3.5-turbo",
     "embedding_model": "text-embedding-3-small"
   },
   "llm_parameters": {
     "temperature": 0.7,
-    "max_completion_tokens": 300
+    "max_tokens": 300
   },
   "paths": {
     "chroma_persist_dir": "./chroma_db",
-    "memory_dir": "./chat_history",
     "system_prompt_file": "./system_prompt.json",
     "config_file": "./config.json"
   },
   "memory": {
-    "k": 10,
+    "k": 15,
     "description": "최근 k개 대화만 기억"
   },
   "rag": {

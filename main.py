@@ -11,8 +11,6 @@ from models import (
     GenerateRequest,
     GenerateResponse,
     AddDocumentRequest,
-    MemoryResponse,
-    StatsResponse,
     HealthResponse
 )
 from app_initializer import AppInitializer
@@ -29,7 +27,6 @@ services = initializer.get_services()
 # 서비스 객체들
 chat_service = services['chat']
 document_service = services['document']
-memory_service = services['memory']
 stats_service = services['stats']
 
 
@@ -68,7 +65,7 @@ async def generate_response(request: GenerateRequest):
     Returns:
         GenerateResponse: AI 응답
     """
-    return chat_service.generate_response(request)
+    return await chat_service.generate_response(request)
 
 
 # ============================================
@@ -174,64 +171,18 @@ async def clear_documents():
 
 
 # ============================================
-# [API 엔드포인트 - 메모리 관리]
-# ============================================
-
-@app.get("/memory/{user_id}", response_model=MemoryResponse)
-async def get_memory(user_id: str):
-    """
-    대화 메모리 조회 (외부 호출용)
-    
-    Args:
-        user_id: 사용자 ID
-    
-    Returns:
-        MemoryResponse: 메모리 정보
-    """
-    result = memory_service.get_memory(user_id)
-    
-    return MemoryResponse(
-        user_id=result["user_id"],
-        conversation_count=result["conversation_count"],
-        history=result["history"]
-    )
-
-
-@app.delete("/memory/{user_id}")
-async def clear_memory(user_id: str):
-    """
-    대화 메모리 삭제 (외부 호출용)
-    
-    Args:
-        user_id: 사용자 ID
-    
-    Returns:
-        Dict: 삭제 결과
-    """
-    return memory_service.clear_memory(user_id)
-
-
-# ============================================
 # [API 엔드포인트 - 시스템 정보]
 # ============================================
 
-@app.get("/stats", response_model=StatsResponse)
+@app.get("/stats")
 async def get_stats():
     """
     서버 통계 조회 (외부 호출용)
     
     Returns:
-        StatsResponse: 서버 통계
+        Dict: 서버 통계
     """
-    result = stats_service.get_stats()
-    
-    return StatsResponse(
-        active_users=result["active_users"],
-        total_conversations=result["total_conversations"],
-        documents_in_db=result["documents_in_db"],
-        model=result["model"],
-        embedding_model=result["embedding_model"]
-    )
+    return stats_service.get_stats()
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -278,7 +229,7 @@ async def root():
         "model": Config.LLM_MODEL,
         "features": [
             "RAG (문서 기반 검색)",
-            "Memory (대화 기록 관리)",
+            "Memory (라우터 서버 연동)",
             "Document Management (문서 추가/검색/삭제)",
             "Modular Architecture (모듈화 구조)",
             "JSON Configuration (JSON 기반 설정)"
@@ -293,10 +244,6 @@ async def root():
                 "search": "GET /documents/search - 문서 검색",
                 "count": "GET /documents/count - 문서 수 조회",
                 "clear": "DELETE /documents/clear - 문서 DB 초기화"
-            },
-            "memory": {
-                "get": "GET /memory/{user_id} - 대화 기록 조회",
-                "clear": "DELETE /memory/{user_id} - 대화 기록 삭제"
             },
             "system": {
                 "stats": "GET /stats - 서버 통계",

@@ -20,3 +20,5 @@ python-dotenv>=1.0.0
 
 # === Optional: If you use OpenAI models ===
 openai>=1.0.0
+-e 
+httpx>=0.27.0

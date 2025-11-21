@@ -19,7 +19,6 @@ class GenerateResponse(BaseModel):
     """LLM 생성 응답 모델"""
     success: bool = Field(..., description="성공 여부")
     response: str = Field(..., description="AI 응답")
-    user_query: str = Field(..., description="사용자 질문")  # ← 이 줄 추가
     source: str = Field(default="llm", description="응답 소스")
     user_id: str = Field(..., description="사용자 ID")
     rag_used: bool = Field(default=False, description="RAG 사용 여부")
@@ -40,17 +39,8 @@ class DocumentSearchRequest(BaseModel):
     k: int = Field(default=3, description="검색할 문서 수")
 
 
-class MemoryResponse(BaseModel):
-    """메모리 조회 응답 모델"""
-    user_id: str = Field(..., description="사용자 ID")
-    conversation_count: int = Field(..., description="대화 수")
-    history: List[Dict] = Field(..., description="대화 기록")
-
-
 class StatsResponse(BaseModel):
     """서버 통계 응답 모델"""
-    active_users: int = Field(..., description="활성 사용자 수")
-    total_conversations: int = Field(..., description="전체 대화 수")
     documents_in_db: int = Field(..., description="벡터 DB 문서 수")
     model: str = Field(..., description="사용 중인 LLM 모델")
     embedding_model: str = Field(..., description="사용 중인 임베딩 모델")
