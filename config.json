@@ -7,7 +7,7 @@
     "version": "3.2.0"
   },
   "model": {
-    "llm_model": "gpt-4.0-mini",
+    "llm_model": "gpt-4o-mini",
     "embedding_model": "text-embedding-3-small"
   },
   "llm_parameters": {
