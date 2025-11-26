@@ -11,6 +11,8 @@ from models import (
     GenerateRequest,
     GenerateResponse,
     AddDocumentRequest,
+    MemoryResponse,
+    StatsResponse,
     HealthResponse
 )
 from app_initializer import AppInitializer
@@ -27,6 +29,7 @@ services = initializer.get_services()
 # 서비스 객체들
 chat_service = services['chat']
 document_service = services['document']
+memory_service = services['memory']
 stats_service = services['stats']
 
 
@@ -57,15 +60,36 @@ app.add_middleware(
 @app.post("/generate", response_model=GenerateResponse)
 async def generate_response(request: GenerateRequest):
     """
-    채팅 응답 생성 (외부 호출용)
-    
-    Args:
-        request: 생성 요청
-    
-    Returns:
-        GenerateResponse: AI 응답
+    채팅 응답 생성 (POST 방식)
     """
-    return await chat_service.generate_response(request)
+    return chat_service.generate_response(request)
+
+
+@app.get("/generate", response_model=GenerateResponse)
+async def generate_response_get(
+    text: str = None,
+    uuid: str = "anonymous",
+    use_rag: bool = True,
+    use_memory: bool = True
+):
+    """
+    채팅 응답 생성 (GET 방식 - 중간 서버 호환용)
+    """
+    if not text:
+        return GenerateResponse(
+            success=False,
+            response="text 파라미터가 필요합니다",
+            user_id=uuid,
+            error="missing text parameter"
+        )
+
+    request = GenerateRequest(
+        text=text,
+        user_id=uuid,  # uuid를 내부적으로 user_id로 사용
+        use_rag=use_rag,
+        use_memory=use_memory
+    )
+    return chat_service.generate_response(request)
 
 
 # ============================================
@@ -76,15 +100,15 @@ async def generate_response(request: GenerateRequest):
 async def add_document(request: AddDocumentRequest):
     """
     벡터 DB에 문서 추가 (외부 호출용)
-    
+
     Args:
         request: 문서 추가 요청
-    
+
     Returns:
         Dict: 추가 결과
     """
     result = document_service.add_document(request.content, request.metadata)
-    
+
     if result["success"]:
         return {
             "success": True,
@@ -99,16 +123,16 @@ async def add_document(request: AddDocumentRequest):
 async def add_document_from_file(file: UploadFile = File(...)):
     """
     파일에서 문서 추가 (외부 호출용)
-    
+
     Args:
         file: 업로드된 파일
-    
+
     Returns:
         Dict: 추가 결과
     """
     content = await file.read()
     result = document_service.add_document_from_file(file.filename, content)
-    
+
     if result["success"]:
         return result
     else:
@@ -119,16 +143,16 @@ async def add_document_from_file(file: UploadFile = File(...)):
 async def search_documents(query: str, k: int = 3):
     """
     벡터 DB에서 문서 검색 (외부 호출용)
-    
+
     Args:
         query: 검색 쿼리
         k: 검색할 문서 수
-    
+
     Returns:
         Dict: 검색 결과
     """
     result = document_service.search_documents(query, k)
-    
+
     if result["success"]:
         return result
     else:
@@ -139,7 +163,7 @@ async def search_documents(query: str, k: int = 3):
 async def get_document_count():
     """
     벡터 DB의 문서 수 조회 (외부 호출용)
-    
+
     Returns:
         Dict: 문서 수 정보
     """
@@ -155,12 +179,12 @@ async def get_document_count():
 async def clear_documents():
     """
     벡터 DB 초기화 (외부 호출용)
-    
+
     Returns:
         Dict: 초기화 결과
     """
     success = document_service.clear_documents()
-    
+
     if success:
         return {
             "success": True,
@@ -171,30 +195,76 @@ async def clear_documents():
 
 
 # ============================================
+# [API 엔드포인트 - 메모리 관리]
+# ============================================
+
+@app.get("/memory/{user_id}", response_model=MemoryResponse)
+async def get_memory(user_id: str):
+    """
+    대화 메모리 조회 (외부 호출용)
+
+    Args:
+        user_id: 사용자 ID
+
+    Returns:
+        MemoryResponse: 메모리 정보
+    """
+    result = memory_service.get_memory(user_id)
+
+    return MemoryResponse(
+        user_id=result["user_id"],
+        conversation_count=result["conversation_count"],
+        history=result["history"]
+    )
+
+
+@app.delete("/memory/{user_id}")
+async def clear_memory(user_id: str):
+    """
+    대화 메모리 삭제 (외부 호출용)
+
+    Args:
+        user_id: 사용자 ID
+
+    Returns:
+        Dict: 삭제 결과
+    """
+    return memory_service.clear_memory(user_id)
+
+
+# ============================================
 # [API 엔드포인트 - 시스템 정보]
 # ============================================
 
-@app.get("/stats")
+@app.get("/stats", response_model=StatsResponse)
 async def get_stats():
     """
     서버 통계 조회 (외부 호출용)
-    
+
     Returns:
-        Dict: 서버 통계
+        StatsResponse: 서버 통계
     """
-    return stats_service.get_stats()
+    result = stats_service.get_stats()
+
+    return StatsResponse(
+        active_users=result["active_users"],
+        total_conversations=result["total_conversations"],
+        documents_in_db=result["documents_in_db"],
+        model=result["model"],
+        embedding_model=result["embedding_model"]
+    )
 
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """
     헬스체크 (외부 호출용)
-    
+
     Returns:
         HealthResponse: 서버 상태
     """
     result = stats_service.get_health()
-    
+
     return HealthResponse(
         status=result["status"],
         service=result["service"],
@@ -207,7 +277,7 @@ async def health_check():
 async def get_config():
     """
     현재 서버 설정 조회 (외부 호출용)
-    
+
     Returns:
         Dict: 서버 설정 정보
     """
@@ -218,7 +288,7 @@ async def get_config():
 async def root():
     """
     루트 엔드포인트 - API 정보 (외부 호출용)
-    
+
     Returns:
         Dict: 서버 정보 및 엔드포인트 목록
     """
@@ -229,7 +299,7 @@ async def root():
         "model": Config.LLM_MODEL,
         "features": [
             "RAG (문서 기반 검색)",
-            "Memory (라우터 서버 연동)",
+            "Memory (대화 기록 관리)",
             "Document Management (문서 추가/검색/삭제)",
             "Modular Architecture (모듈화 구조)",
             "JSON Configuration (JSON 기반 설정)"
@@ -244,6 +314,10 @@ async def root():
                 "search": "GET /documents/search - 문서 검색",
                 "count": "GET /documents/count - 문서 수 조회",
                 "clear": "DELETE /documents/clear - 문서 DB 초기화"
+            },
+            "memory": {
+                "get": "GET /memory/{user_id} - 대화 기록 조회",
+                "clear": "DELETE /memory/{user_id} - 대화 기록 삭제"
             },
             "system": {
                 "stats": "GET /stats - 서버 통계",
