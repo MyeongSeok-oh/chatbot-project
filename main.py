@@ -5,6 +5,7 @@ main.py - RAG 기반 LLM 서버 (API 엔드포인트)
 """
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import httpx
 
 from config import Config
 from models import (
@@ -197,6 +198,33 @@ async def clear_documents():
 # ============================================
 # [API 엔드포인트 - 메모리 관리]
 # ============================================
+
+@app.get("/memory")
+async def get_all_users_memory():
+    """
+    백엔드에서 모든 사용자 메모리 조회 (외부 호출용)
+    """
+    user_list = []
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get("http://localhost:5001/users")
+            response.raise_for_status()
+            data = response.json()
+
+            for user in data:
+                user_dict = {
+                    "uuid": user["uuid"],
+                    "input_text_list": user["input_text_list"],
+                    "output_text_list": user["output_text_list"]
+                }
+                user_list.append(user_dict)
+
+            return user_list
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=500, detail=f"Backend 서버 연결 실패: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"알 수 없는 오류: {str(e)}")
+
 
 @app.get("/memory/{user_id}", response_model=MemoryResponse)
 async def get_memory(user_id: str):

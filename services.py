@@ -1,17 +1,22 @@
 """
 services.py - 비즈니스 로직 처리
-RAG + Memory 통합 버전 (라우터 서버 연동)
+RAG + Memory 통합 버전 (백엔드 메모리 연동)
 """
 from datetime import datetime
 from typing import List, Tuple, Dict, Optional
+import httpx
 
 from langchain_core.documents import Document
+from langchain_core.messages import HumanMessage, AIMessage
 
 from config import Config
 from llm_manager import LLMManager
 from rag_manager import RAGManager
 from memory_manager import MemoryManager
 from models import GenerateRequest, GenerateResponse
+
+# 백엔드 서버 주소
+BACKEND_URL = "http://127.0.0.1:5001"
 
 
 class ChatService:
@@ -33,7 +38,41 @@ class ChatService:
         self.rag_manager = rag_manager
         self.memory_manager = memory_manager
 
-    async def generate_response(self, request: GenerateRequest) -> GenerateResponse:
+    def _fetch_chat_history_from_backend(self, user_id: str) -> List:
+        """
+        백엔드 서버에서 대화 기록 가져오기
+
+        Args:
+            user_id: 사용자 ID (uuid)
+
+        Returns:
+            List: LangChain 메시지 형식의 대화 기록
+        """
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                response = client.get(f"{BACKEND_URL}/users/{user_id}")
+                response.raise_for_status()
+                user = response.json()
+
+                input_list = user.get("input_text_list", []) or []
+                output_list = user.get("output_text_list", []) or []
+
+                # LangChain 메시지 형식으로 변환
+                messages = []
+                for i in range(max(len(input_list), len(output_list))):
+                    if i < len(input_list) and input_list[i]:
+                        messages.append(HumanMessage(content=input_list[i]))
+                    if i < len(output_list) and output_list[i]:
+                        messages.append(AIMessage(content=output_list[i]))
+
+                print(f"[ChatService] 백엔드에서 {len(messages)}개 메시지 로드 (uuid: {user_id})")
+                return messages
+
+        except Exception as e:
+            print(f"[ChatService] 백엔드 대화 기록 조회 실패: {e}")
+            return []
+
+    def generate_response(self, request: GenerateRequest) -> GenerateResponse:
         """
         사용자 요청에 대한 응답 생성
 
@@ -52,10 +91,10 @@ class ChatService:
         try:
             if request.use_rag:
                 # RAG 모드
-                return await self._generate_with_rag(request, start_time)
+                return self._generate_with_rag(request, start_time)
             else:
                 # 일반 모드
-                return await self._generate_without_rag(request, start_time)
+                return self._generate_without_rag(request, start_time)
 
         except Exception as e:
             error_msg = str(e)
@@ -68,26 +107,21 @@ class ChatService:
                 error=error_msg
             )
 
-    async def _generate_with_rag(
+    def _generate_with_rag(
         self,
         request: GenerateRequest,
         start_time: datetime
     ) -> GenerateResponse:
         """
         RAG를 사용한 응답 생성
+        ⭐ 백엔드 서버에서 대화 기록 가져옴
         """
         print(f"[Service] RAG 모드 실행")
 
-        # ⭐ 1. 메모리 사용 여부 확인
+        # ⭐ 백엔드에서 대화 기록 가져오기
         if request.use_memory:
-            print(f"[Service] RAG + 메모리 모드 - 라우터에서 대화 기록 로드")
-            
-            # 라우터 서버에서 대화 기록 가져오기
-            chat_history_data = await self.memory_manager.load_chat_history_from_router(request.user_id)
-            
-            # 메모리 객체 생성 및 복원
-            memory = self.memory_manager.get_or_create_memory(request.user_id, chat_history_data)
-            chat_history = memory.load_memory_variables({}).get("chat_history", [])
+            print(f"[Service] RAG + 메모리 모드 (백엔드 연동)")
+            chat_history = self._fetch_chat_history_from_backend(request.user_id)
 
             # RAG + 메모리 통합 응답 생성
             bot_response, source_docs = self.rag_manager.generate_with_rag_and_memory(
@@ -96,7 +130,6 @@ class ChatService:
             )
         else:
             print(f"[Service] RAG 단독 모드")
-            # 기존 방식: RAG만 사용
             bot_response, source_docs = self.rag_manager.generate_with_rag(request.text)
 
         # 출처 문서 정보 포맷팅
@@ -107,6 +140,8 @@ class ChatService:
 
         print(f"[Service] RAG 응답 완료 ({len(source_docs)}개 문서)")
 
+        # ⭐ 메모리 저장은 백엔드에서 하므로 여기서는 안 함
+
         return GenerateResponse(
             success=True,
             response=bot_response,
@@ -115,21 +150,17 @@ class ChatService:
             source_documents=source_info if source_docs else None
         )
 
-    async def _generate_without_rag(
+    def _generate_without_rag(
         self,
         request: GenerateRequest,
         start_time: datetime
     ) -> GenerateResponse:
-        """RAG 없이 일반 응답 생성"""
+        """RAG 없이 일반 응답 생성 (백엔드 메모리 연동)"""
         print(f"[Service] 일반 모드 실행")
 
         if request.use_memory:
-            # 라우터 서버에서 대화 기록 가져오기
-            chat_history_data = await self.memory_manager.load_chat_history_from_router(request.user_id)
-            
-            # 메모리 객체 생성 및 복원
-            memory = self.memory_manager.get_or_create_memory(request.user_id, chat_history_data)
-            chat_history = memory.load_memory_variables({}).get("chat_history", [])
+            # ⭐ 백엔드에서 대화 기록 가져오기
+            chat_history = self._fetch_chat_history_from_backend(request.user_id)
 
             bot_response = self.llm_manager.generate_with_history(
                 request.text,
@@ -272,19 +303,73 @@ class DocumentService:
         return self.rag_manager.clear_documents()
 
 
+class MemoryService:
+    """메모리 관련 비즈니스 로직"""
+
+    def __init__(self, memory_manager: MemoryManager):
+        """
+        Args:
+            memory_manager: 메모리 관리자
+        """
+        self.memory_manager = memory_manager
+
+    def get_memory(self, user_id: str) -> Dict:
+        """
+        대화 메모리 조회
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            Dict: 메모리 정보
+        """
+        info = self.memory_manager.get_memory_info(user_id)
+
+        return {
+            "user_id": info["user_id"],
+            "conversation_count": info["conversation_count"],
+            "history": info["history"]
+        }
+
+    def clear_memory(self, user_id: str) -> Dict:
+        """
+        대화 메모리 삭제
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            Dict: 삭제 결과
+        """
+        success = self.memory_manager.clear_memory(user_id)
+
+        if success:
+            return {"message": f"{user_id}의 대화 기록이 삭제되었습니다"}
+        else:
+            return {"message": "대화 기록이 없습니다"}
+
+
 class StatsService:
     """통계 관련 비즈니스 로직"""
 
-    def __init__(self, rag_manager: RAGManager):
+    def __init__(
+        self,
+        memory_manager: MemoryManager,
+        rag_manager: RAGManager
+    ):
         """
         Args:
+            memory_manager: 메모리 관리자
             rag_manager: RAG 관리자
         """
+        self.memory_manager = memory_manager
         self.rag_manager = rag_manager
 
     def get_stats(self) -> Dict:
         """서버 통계 조회"""
         return {
+            "active_users": self.memory_manager.get_active_users(),
+            "total_conversations": self.memory_manager.get_total_conversations(),
             "documents_in_db": self.rag_manager.get_document_count(),
             "model": Config.LLM_MODEL,
             "embedding_model": Config.EMBEDDING_MODEL
