@@ -16,6 +16,7 @@
   },
   "paths": {
     "chroma_persist_dir": "./chroma_db",
+    "memory_dir": "./chat_history",
     "system_prompt_file": "./system_prompt.json",
     "config_file": "./config.json"
   },
